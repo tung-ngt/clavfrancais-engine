@@ -1,29 +1,26 @@
-use crate::keyboard_listener::{KeyEvent, KeyboardListener, KeyboardListenerCallback};
+use crate::input_listener::{Event, Listener};
 use crate::keys::Key;
 use crate::windows::keys_converter::KeyConverter;
 use lazy_static::lazy_static;
-use std::collections::HashMap;
 use std::ptr::null_mut;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_PACKET, VK_SHIFT
+    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_PACKET, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION,
-    HHOOK, KBDLLHOOKSTRUCT, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP,
-    WM_SYSKEYDOWN, WM_SYSKEYUP,
+    CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP
 };
 
-static mut HOOK: HHOOK = HHOOK(null_mut());
 lazy_static! {
-    static ref KEYBOARD_STATE: Arc<Mutex<WindowsKeyboardListenerState>> =
-        Arc::new(Mutex::new(WindowsKeyboardListenerState::default()));
-    static ref CALLBACK_MAP: Arc<Mutex<CallbackMap>> = Arc::new(Mutex::new(HashMap::new()));
     static ref IS_LISTENING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
-type CallbackMap = HashMap<&'static str, KeyboardListenerCallback>;
+
+static mut SENDER: Option<Sender<Event>> = None;
+static mut HOOK: HHOOK = HHOOK(null_mut());
+static mut KEYBOARD_STATE: Option<WindowsKeyboardListenerState> = None;
 
 const BUFFER_LEN: i32 = 32;
 
@@ -45,11 +42,13 @@ impl Default for WindowsKeyboardListenerState {
     }
 }
 
-pub struct WindowsKeyboardListener;
+pub struct WindowsListener;
 
-impl WindowsKeyboardListener {
+impl WindowsListener {
     unsafe fn get_unicode_char(code: u32, scan_code: u32) -> Option<String> {
-        let mut keyboard_state = KEYBOARD_STATE.lock().unwrap();
+        let Some(keyboard_state) = &mut KEYBOARD_STATE else {
+            return None;
+        };
 
         keyboard_state.last_state = Self::set_global_state();
 
@@ -116,55 +115,60 @@ impl WindowsKeyboardListener {
         }
     }
 
-    unsafe extern "system" fn raw_callback(code: i32, param: WPARAM, lpdata: LPARAM) -> LRESULT {
-        if code as u32 == HC_ACTION {
-            match param.0 as u32 {
-                WM_KEYDOWN | WM_SYSKEYDOWN => {
-                    let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
-                    let virtual_key_code = keyboard_struct.vkCode;
-                    let scan_code = keyboard_struct.scanCode;
-
-                    let has_unicode_flag = virtual_key_code == VK_PACKET.0 as u32;
-
-                    let unicode_chars = if has_unicode_flag {
-                        char::from_u32(scan_code).map(|c| c.to_string())
-                    } else {
-                        Self::get_unicode_char(virtual_key_code, scan_code)
-                    };
-
-                    let key = Key::from_virtual_key_code(virtual_key_code);
-
-                    let key_event = KeyEvent::new(unicode_chars, key);
-                    let callback_map = CALLBACK_MAP.lock().unwrap();
-                    for (_, callback) in callback_map.iter() {
-                        callback(&key_event);
-                    }
-                }
-                WM_KEYUP | WM_SYSKEYUP => {
-                    // println!("keyup");
-                }
-                _ => (),
-            }
+    unsafe fn process_event(code: i32, param: WPARAM, lpdata: LPARAM) {
+        if code as u32 != HC_ACTION {
+            return;
         }
+        match param.0 as u32 {
+            WM_KEYDOWN | WM_SYSKEYDOWN => {
+                let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
+                let virtual_key_code = keyboard_struct.vkCode;
+                let scan_code = keyboard_struct.scanCode;
+
+                let flags = keyboard_struct.flags;
+
+                let is_injected = flags & LLKHF_INJECTED;
+                if is_injected.0 != 0 {
+                    return;
+                }
+
+                let has_unicode_flag = virtual_key_code == VK_PACKET.0 as u32;
+
+                let unicode_chars = if has_unicode_flag {
+                    char::from_u32(scan_code).map(|c| c.to_string())
+                } else {
+                    Self::get_unicode_char(virtual_key_code, scan_code)
+                };
+
+                let key = Key::from_virtual_key_code(virtual_key_code);
+
+                
+                if let Some(sender) = &SENDER {
+                    let _ = sender.send(Event::Key{ unicode_chars, key });
+                };
+            }
+            WM_KEYUP | WM_SYSKEYUP => {
+                // println!("keyup");
+            }
+            _ => (),
+        }
+    }
+
+    unsafe extern "system" fn raw_callback(code: i32, param: WPARAM, lpdata: LPARAM) -> LRESULT {
+        Self::process_event(code, param, lpdata);
         CallNextHookEx(HOOK, code, param, lpdata)
     }
 }
-
-impl KeyboardListener for WindowsKeyboardListener {
-    fn add_callback(name: &'static str, callback: KeyboardListenerCallback) {
-        let mut callback_map = CALLBACK_MAP.lock().unwrap();
-        callback_map.insert(name, callback);
-    }
-
-    fn remove_callback(name: &'static str) {
-        let mut callback_map = CALLBACK_MAP.lock().unwrap();
-        callback_map.remove(name);
-    }
-
-    fn start_listening() -> JoinHandle<()> {
+impl Listener for WindowsListener {
+    fn start_listening(sender: Sender<Event>) -> JoinHandle<()> 
+    {
         {
             let mut is_listening = IS_LISTENING.lock().unwrap();
             *is_listening = true
+        }
+        unsafe {
+            SENDER = Some(sender);
+            KEYBOARD_STATE = Some(WindowsKeyboardListenerState::default());
         }
 
         thread::spawn(|| unsafe {

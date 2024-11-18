@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Key {
     /// Alt key on Linux and Windows (option key on macOS)
     Alt,
@@ -110,3 +110,42 @@ pub enum Key {
     Function,
     Unknown(u32),
 }
+
+pub const CHANGE_FOCUS_KEYS: [Key; 36] = [
+    Key::Alt,
+    Key::AltGr,
+    Key::ControlLeft,
+    Key::ControlRight,
+    Key::DownArrow,
+    Key::End,
+    Key::Escape,
+    Key::F1,
+    Key::F10,
+    Key::F11,
+    Key::F12,
+    Key::F2,
+    Key::F3,
+    Key::F4,
+    Key::F5,
+    Key::F6,
+    Key::F7,
+    Key::F8,
+    Key::F9,
+    Key::Home,
+    Key::LeftArrow,
+    Key::MetaLeft,
+    Key::MetaRight,
+    Key::PageDown,
+    Key::PageUp,
+    Key::Return,
+    Key::RightArrow,
+    Key::Tab,
+    Key::UpArrow,
+    Key::PrintScreen,
+    Key::ScrollLock,
+    Key::Pause,
+    Key::NumLock,
+    Key::BackQuote,
+    Key::NumpadReturn,
+    Key::Function,
+];

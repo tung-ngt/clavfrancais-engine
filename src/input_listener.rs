@@ -5,7 +5,7 @@ use std::{sync::mpsc::Sender, thread::JoinHandle};
 pub enum Event {
     Mouse,
     Key {
-        unicode_chars: Option<String>,
+        unicode_char: Option<char>,
         key: Key,
     },
 }

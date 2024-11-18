@@ -1,11 +1,8 @@
 use core::mem::size_of;
 
-use windows::Win32::UI::{
-    Input::KeyboardAndMouse::{
+use windows::Win32::UI::Input::KeyboardAndMouse::{
         SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_BACK
-    },
-    WindowsAndMessaging::GetMessageExtraInfo,
-};
+    };
 
 use crate::input_simulator::InputSimulator;
 

@@ -110,6 +110,10 @@ impl<T: CharBuffer> InputController<T> {
     pub fn clear_char_buffer(&mut self) {
         self.char_buffer.clear();
     }
+
+    pub fn backspace(&mut self) {
+        self.char_buffer.pop();
+    }
 }
 
 #[cfg(test)]

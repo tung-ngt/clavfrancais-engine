@@ -2,6 +2,7 @@ use crate::input_listener::{Event, Listener};
 use crate::keys::Key;
 use crate::windows::keys_converter::KeyConverter;
 use lazy_static::lazy_static;
+use std::char;
 use std::ptr::null_mut;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -11,7 +12,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_PACKET, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP
+    CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION,
+    HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WM_KEYDOWN,
+    WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
 lazy_static! {
@@ -45,7 +48,7 @@ impl Default for WindowsKeyboardListenerState {
 pub struct WindowsListener;
 
 impl WindowsListener {
-    unsafe fn get_unicode_char(code: u32, scan_code: u32) -> Option<String> {
+    unsafe fn get_unicode_char(code: u32, scan_code: u32) -> Option<char> {
         let Some(keyboard_state) = &mut KEYBOARD_STATE else {
             return None;
         };
@@ -74,7 +77,7 @@ impl WindowsListener {
                 Self::clear_keyboard_buffer(code, scan_code, layout);
                 None
             }
-            len if len > 0 => String::from_utf16(&buff[..len as usize]).ok(),
+            1 => char::decode_utf16(buff).next().unwrap().ok(),
             _ => None,
         };
 
@@ -134,17 +137,16 @@ impl WindowsListener {
 
                 let has_unicode_flag = virtual_key_code == VK_PACKET.0 as u32;
 
-                let unicode_chars = if has_unicode_flag {
-                    char::from_u32(scan_code).map(|c| c.to_string())
+                let unicode_char = if has_unicode_flag {
+                    char::from_u32(scan_code)
                 } else {
                     Self::get_unicode_char(virtual_key_code, scan_code)
                 };
 
                 let key = Key::from_virtual_key_code(virtual_key_code);
 
-                
                 if let Some(sender) = &SENDER {
-                    let _ = sender.send(Event::Key{ unicode_chars, key });
+                    let _ = sender.send(Event::Key { unicode_char, key });
                 };
             }
             WM_KEYUP | WM_SYSKEYUP => {
@@ -160,8 +162,7 @@ impl WindowsListener {
     }
 }
 impl Listener for WindowsListener {
-    fn start_listening(sender: Sender<Event>) -> JoinHandle<()> 
-    {
+    fn start_listening(sender: Sender<Event>) -> JoinHandle<()> {
         {
             let mut is_listening = IS_LISTENING.lock().unwrap();
             *is_listening = true

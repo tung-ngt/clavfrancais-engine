@@ -2,14 +2,16 @@ use std::sync::mpsc;
 
 use crate::{
     char_buffer::FixedSizeCharBuffer,
-    input_controller::{self, CombinationTarget, InputController, KeyCombinationMap},
+    input_controller::{CombinationTarget, InputController, KeyCombinationMap},
     input_listener::{Event, Listener},
     input_simulator::InputSimulator,
+    keys::{Key, CHANGE_FOCUS_KEYS},
     InputSimulatorImpl, KeyboardListenerImpl,
 };
 
 pub struct Engine {
     input_controller: InputController<FixedSizeCharBuffer>,
+    open_guillmets: bool,
 }
 
 impl Engine {
@@ -17,6 +19,7 @@ impl Engine {
         let char_buffer = FixedSizeCharBuffer::new(50);
         Self {
             input_controller: InputController::new(combination_map, char_buffer),
+            open_guillmets: true,
         }
     }
 
@@ -25,30 +28,46 @@ impl Engine {
         KeyboardListenerImpl::start_listening(sender);
         loop {
             let event = receiver.recv().unwrap();
-            let Event::Key {
-                unicode_chars: Some(unicode_chars),
-                key: _,
-            } = event
-            else {
+            let Event::Key { unicode_char, key } = event else {
                 continue;
             };
 
-            if unicode_chars.is_empty() {
+            if CHANGE_FOCUS_KEYS.contains(&key) {
+                self.input_controller.clear_char_buffer();
                 continue;
             }
 
-            println!("{}", unicode_chars);
+            if key == Key::Quote {
+                let guillements = if self.open_guillmets { '«' } else { '»' };
+                self.open_guillmets = !self.open_guillmets;
+                
+                let _ = self.input_controller.add_char(guillements);
 
-            let target = self
-                .input_controller
-                .add_char(unicode_chars.chars().next().unwrap());
+                InputSimulatorImpl::backspace();
+                InputSimulatorImpl::character(guillements);
+                continue;
+            }
+
+            let Some(unicode_char) = unicode_char else {
+                continue;
+            };
+
+            println!("{:?}", key);
+            if key == Key::Backspace {
+                self.input_controller.backspace();
+                continue;
+            }
+
+            println!("{}", unicode_char);
+
+            let target = self.input_controller.add_char(unicode_char);
 
             let Some(target) = target else {
                 continue;
             };
             InputSimulatorImpl::backspace();
             InputSimulatorImpl::backspace();
-            
+
             if let CombinationTarget::Combine(a) = target {
                 InputSimulatorImpl::character(*a);
                 println!("{:?}", self.input_controller.char_buffer);
@@ -60,7 +79,6 @@ impl Engine {
                 InputSimulatorImpl::character(*b);
             }
             println!("{:?}", self.input_controller.char_buffer);
-
         }
         self
     }

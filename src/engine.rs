@@ -1,7 +1,7 @@
 use std::sync::mpsc;
 
 use crate::{
-    char_buffer::FixedSizeCharBuffer,
+    char_buffer::{HeapSizedCharBuffer, StackSizedCharBuffer},
     input_controller::{CombinationTarget, InputController, KeyCombinationMap},
     input_listener::{Event, Listener},
     input_simulator::InputSimulator,
@@ -10,13 +10,13 @@ use crate::{
 };
 
 pub struct Engine {
-    input_controller: InputController<FixedSizeCharBuffer<10>>,
+    input_controller: InputController<HeapSizedCharBuffer>,
     open_guillmets: bool,
 }
 
 impl Engine {
     pub fn new(combination_map: KeyCombinationMap) -> Self {
-        let char_buffer = FixedSizeCharBuffer::default();
+        let char_buffer = HeapSizedCharBuffer::new(10); 
         Self {
             input_controller: InputController::new(combination_map, char_buffer),
             open_guillmets: true,
@@ -40,7 +40,7 @@ impl Engine {
             if key == Key::Quote {
                 let guillements = if self.open_guillmets { '«' } else { '»' };
                 self.open_guillmets = !self.open_guillmets;
-                
+
                 let _ = self.input_controller.add_char(guillements);
 
                 InputSimulatorImpl::backspace();

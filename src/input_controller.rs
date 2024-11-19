@@ -86,7 +86,7 @@ impl<T: CharBuffer> InputController<T> {
         };
 
         let Some(combination_target) = self.combination_map
-            .get(&KeyCombination(*previous_char, current_char))
+            .get(&KeyCombination(previous_char, current_char))
         else {
             self.char_buffer.push(current_char);
             return None;

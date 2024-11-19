@@ -10,13 +10,13 @@ use crate::{
 };
 
 pub struct Engine {
-    input_controller: InputController<FixedSizeCharBuffer>,
+    input_controller: InputController<FixedSizeCharBuffer<10>>,
     open_guillmets: bool,
 }
 
 impl Engine {
     pub fn new(combination_map: KeyCombinationMap) -> Self {
-        let char_buffer = FixedSizeCharBuffer::new(50);
+        let char_buffer = FixedSizeCharBuffer::default();
         Self {
             input_controller: InputController::new(combination_map, char_buffer),
             open_guillmets: true,

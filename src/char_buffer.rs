@@ -1,11 +1,11 @@
-use std::{collections::VecDeque, fmt::Debug};
+use std::fmt::Debug;
 
 pub trait CharBuffer : Debug {
     fn len(&self) -> usize;
 
     fn is_empty(&self) -> bool;
 
-    fn top(&self) -> Option<&char>;
+    fn top(&self) -> Option<char>;
 
     fn push(&mut self, element: char);
 
@@ -42,8 +42,8 @@ impl CharBuffer for ResizableCharBuffer {
         self.elements.is_empty()
     }
 
-    fn top(&self) -> Option<&char> {
-        self.elements.last()
+    fn top(&self) -> Option<char> {
+        self.elements.last().copied()
     }
 
     fn push(&mut self, element: char) {
@@ -60,51 +60,66 @@ impl CharBuffer for ResizableCharBuffer {
 }
 
 #[derive(Debug)]
-pub struct FixedSizeCharBuffer {
-    elements: VecDeque<char>,
-    capacity: usize,
+pub struct FixedSizeCharBuffer<const CAPACITY: usize>
+{
+    elements: [char; CAPACITY],
+    top_index: usize,
+    len: usize,
 }
 
-impl FixedSizeCharBuffer {
-    pub fn new(capacity: usize) -> Self {
+impl<const CAPACITY: usize> Default for FixedSizeCharBuffer<CAPACITY> {
+    fn default() -> Self {
+        assert!(CAPACITY != 0, "capacity must be > 0");
         Self {
-            elements: VecDeque::new(),
-            capacity
+            elements: ['\0'; CAPACITY],
+            top_index: 0,
+            len: 0
         }
     }
+}
 
-    pub fn capacity(&self) -> usize {
-        self.capacity
+impl<const CAPACITY: usize> FixedSizeCharBuffer<CAPACITY> {
+    pub fn is_full(&self) -> bool {
+        self.len == CAPACITY
     }
 }
 
-impl CharBuffer for FixedSizeCharBuffer {
+impl<const CAPACITY: usize> CharBuffer for FixedSizeCharBuffer<CAPACITY> {
     fn len(&self) -> usize {
-        self.elements.len()
+        self.len
     }
 
     fn is_empty(&self) -> bool {
-        self.elements.is_empty()
+        self.len == 0
     }
 
-    fn top(&self) -> Option<&char> {
-        self.elements.back()
+    fn top(&self) -> Option<char> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.elements[self.top_index])
+        }
     }
 
     fn push(&mut self, element: char) {
-        if self.len() == self.capacity() {
-            self.elements.pop_front();
-        }
-
-        self.elements.push_back(element);
+        self.top_index = (self.top_index + 1) % CAPACITY;
+        self.len += if self.is_full() {0} else {1};
+        self.elements[self.top_index] = element;
     }
 
     fn pop(&mut self) -> Option<char> {
-        self.elements.pop_back()
+        if self.is_empty() {
+            return None;
+        }
+        let top_element = self.elements[self.top_index];
+        
+        self.top_index = (self.top_index + CAPACITY - 1) % CAPACITY;
+        self.len -= 1;
+        Some(top_element)
     }
 
     fn clear(&mut self) {
-        self.elements.clear()
+        self.len = 0;
     }
 }
 
@@ -220,7 +235,7 @@ mod tests {
         assert_eq!(char_stack.pop(), None);
         char_stack.push('a');
         assert_eq!(char_stack.len(), 1);
-        assert_eq!(char_stack.top(), Some(&'a'));
+        assert_eq!(char_stack.top(), Some('a'));
         assert_eq!(char_stack.pop(), Some('a'));
         char_stack.push('b');
         assert_eq!(char_stack.len(), 1);
@@ -228,7 +243,7 @@ mod tests {
         assert_eq!(char_stack.len(), 2);
         assert_eq!(char_stack.pop(), Some('c'));
         assert_eq!(char_stack.len(), 1);
-        assert_eq!(char_stack.top(), Some(&'b'));
+        assert_eq!(char_stack.top(), Some('b'));
         assert_eq!(char_stack.pop(), Some('b'));
         assert_eq!(char_stack.top(), None);
         assert_eq!(char_stack.pop(), None);

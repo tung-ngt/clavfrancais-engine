@@ -38,7 +38,11 @@ impl Engine {
                         continue;
                     }
 
-                    if key == Key::Quote {
+                    let Some(unicode_char) = unicode_char else {
+                        continue;
+                    };
+
+                    if unicode_char == '"' {
                         let guillements = if self.open_guillmets { '«' } else { '»' };
                         self.open_guillmets = !self.open_guillmets;
 
@@ -48,10 +52,6 @@ impl Engine {
                         InputSimulatorImpl::character(guillements);
                         continue;
                     }
-
-                    let Some(unicode_char) = unicode_char else {
-                        continue;
-                    };
 
                     println!("{:?}", key);
                     if key == Key::Backspace {

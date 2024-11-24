@@ -1,4 +1,4 @@
-use crate::input_listener::{Event, Listener};
+use crate::input_listener::{Event, ListenForEvent, Listener};
 use crate::keys::Key;
 use crate::windows::keys_converter::KeyConverter;
 use lazy_static::lazy_static;
@@ -13,8 +13,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION,
-    HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WM_KEYDOWN,
-    WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WH_MOUSE_LL,
+    WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
+    WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
 lazy_static! {
@@ -22,7 +23,6 @@ lazy_static! {
 }
 
 static mut SENDER: Option<Sender<Event>> = None;
-static mut HOOK: HHOOK = HHOOK(null_mut());
 static mut KEYBOARD_STATE: Option<WindowsKeyboardListenerState> = None;
 
 const BUFFER_LEN: i32 = 32;
@@ -67,7 +67,7 @@ impl WindowsListener {
             &mut buff,
             0,
             layout,
-        );
+            );
 
         let mut is_dead = false;
         let result = match len {
@@ -152,17 +152,24 @@ impl WindowsListener {
             WM_KEYUP | WM_SYSKEYUP => {
                 // println!("keyup");
             }
+            WM_RBUTTONDOWN | WM_RBUTTONUP | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_MBUTTONDOWN
+            | WM_MBUTTONUP => {
+                if let Some(sender) = &SENDER {
+                    let _ = sender.send(Event::Mouse);
+                }
+            }
             _ => (),
         }
     }
 
     unsafe extern "system" fn raw_callback(code: i32, param: WPARAM, lpdata: LPARAM) -> LRESULT {
         Self::process_event(code, param, lpdata);
-        CallNextHookEx(HOOK, code, param, lpdata)
+        CallNextHookEx(HHOOK(null_mut()), code, param, lpdata)
     }
 }
+
 impl Listener for WindowsListener {
-    fn start_listening(sender: Sender<Event>) -> JoinHandle<()> {
+    fn start_listening(sender: Sender<Event>, listen_for_envent: ListenForEvent) -> JoinHandle<()> {
         {
             let mut is_listening = IS_LISTENING.lock().unwrap();
             *is_listening = true
@@ -172,14 +179,32 @@ impl Listener for WindowsListener {
             KEYBOARD_STATE = Some(WindowsKeyboardListenerState::default());
         }
 
-        thread::spawn(|| unsafe {
-            HOOK = SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(Self::raw_callback),
-                HINSTANCE(null_mut()),
-                0,
-            )
-            .unwrap();
+        thread::spawn(move || unsafe {
+            let keyboard_hook = match listen_for_envent {
+                ListenForEvent::Key | ListenForEvent::MouseAndKey => Some(
+                    SetWindowsHookExW(
+                        WH_KEYBOARD_LL,
+                        Some(Self::raw_callback),
+                        HINSTANCE(null_mut()),
+                        0,
+                    )
+                    .unwrap(),
+                ),
+                _ => None,
+            };
+
+            let mouse_hook = match listen_for_envent {
+                ListenForEvent::Mouse | ListenForEvent::MouseAndKey => Some(
+                    SetWindowsHookExW(
+                        WH_MOUSE_LL,
+                        Some(Self::raw_callback),
+                        HINSTANCE(null_mut()),
+                        0,
+                    )
+                    .unwrap(),
+                ),
+                _ => None,
+            };
 
             loop {
                 if WaitMessage().is_err() {
@@ -200,7 +225,13 @@ impl Listener for WindowsListener {
                 );
             }
 
-            UnhookWindowsHookEx(HOOK).unwrap();
+            if let Some(mouse_hook) = mouse_hook {
+                UnhookWindowsHookEx(mouse_hook).unwrap();
+            }
+
+            if let Some(keyboard_hook) = keyboard_hook {
+                UnhookWindowsHookEx(keyboard_hook).unwrap();
+            }
         })
     }
 

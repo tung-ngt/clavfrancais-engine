@@ -232,6 +232,8 @@ impl Listener for WindowsListener {
             if let Some(keyboard_hook) = keyboard_hook {
                 UnhookWindowsHookEx(keyboard_hook).unwrap();
             }
+
+            SENDER = None;
         })
     }
 

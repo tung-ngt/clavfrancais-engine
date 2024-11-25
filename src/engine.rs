@@ -1,7 +1,7 @@
 use std::sync::mpsc::{self, Receiver};
 
 use crate::{
-    char_buffer::{HeapSizedCharBuffer, StackSizedCharBuffer},
+    char_buffer::CharBuffer,
     input_controller::{CombinationTarget, InputController, KeyCombinationMap},
     input_listener::{Event, ListenForEvent, Listener},
     input_simulator::InputSimulator,
@@ -9,23 +9,29 @@ use crate::{
     InputSimulatorImpl, KeyboardListenerImpl,
 };
 
-pub struct Engine {
-    input_controller: InputController<HeapSizedCharBuffer>,
+pub struct Engine;
+
+struct EngineState<T>
+where T: CharBuffer
+{
+    input_controller: InputController<T>,
     open_guillmets: bool,
 }
 
-impl Engine {
-    pub fn new(combination_map: KeyCombinationMap) -> Self {
-        let char_buffer = HeapSizedCharBuffer::new(10); 
+impl<T> EngineState<T>
+where T: CharBuffer
+{
+    fn new(combination_map: KeyCombinationMap, char_buffer: T) -> Self {
         Self {
             input_controller: InputController::new(combination_map, char_buffer),
             open_guillmets: true,
         }
     }
-
-    fn handle_event(& mut self, receiver: Receiver<Event>) {
+    fn handle_event(&mut self, receiver: Receiver<Event>) {
         loop {
-            let event = receiver.recv().unwrap();
+            let Ok(event) = receiver.recv() else {
+                return;
+            };
 
             match event {
                 Event::Mouse => {
@@ -53,13 +59,10 @@ impl Engine {
                         continue;
                     }
 
-                    println!("{:?}", key);
                     if key == Key::Backspace {
                         self.input_controller.backspace();
                         continue;
                     }
-
-                    println!("{}", unicode_char);
 
                     let target = self.input_controller.add_char(unicode_char);
 
@@ -71,7 +74,6 @@ impl Engine {
 
                     if let CombinationTarget::Combine(a) = target {
                         InputSimulatorImpl::character(*a);
-                        println!("{:?}", self.input_controller.char_buffer);
                         continue;
                     }
 
@@ -79,17 +81,18 @@ impl Engine {
                         InputSimulatorImpl::character(*a);
                         InputSimulatorImpl::character(*b);
                     }
-                    println!("{:?}", self.input_controller.char_buffer);
                 },
             }
         }
     }
+}
 
-    pub fn start(mut self) -> Self {
+impl Engine {
+    pub fn start(combination_map: KeyCombinationMap, char_buffer: impl CharBuffer)  {
         let (sender, receiver) = mpsc::channel::<Event>();
         KeyboardListenerImpl::start_listening(sender, ListenForEvent::MouseAndKey);
-        self.handle_event(receiver);
-        self
+        let mut engine = EngineState::new(combination_map, char_buffer);
+        engine.handle_event(receiver);
     }
 
     pub fn stop() {

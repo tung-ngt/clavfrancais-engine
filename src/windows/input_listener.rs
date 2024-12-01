@@ -1,4 +1,4 @@
-use crate::input_listener::{Event, ListenForEvent, Listener};
+use crate::input_listener::{Listener, MouseKeyEvent};
 use crate::keys::Key;
 use crate::windows::keys_converter::KeyConverter;
 use lazy_static::lazy_static;
@@ -9,20 +9,23 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_PACKET, VK_SHIFT,
+    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_CONTROL, VK_LMENU,
+    VK_PACKET, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION,
     HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WH_MOUSE_LL,
-    WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
-    WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_RBUTTONDOWN,
+    WM_RBUTTONUP, WM_SYSKEYDOWN,
 };
 
 lazy_static! {
-    static ref IS_LISTENING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref MOUSE_KEY_LISTENING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref SHORTCUT_LISTENING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
-static mut SENDER: Option<Sender<Event>> = None;
+static mut MOUSE_KEY_SENDER: Option<Sender<MouseKeyEvent>> = None;
+static mut SHORTCUT_SENDER: Option<Sender<()>> = None;
 static mut KEYBOARD_STATE: Option<WindowsKeyboardListenerState> = None;
 
 const BUFFER_LEN: i32 = 32;
@@ -67,7 +70,7 @@ impl WindowsListener {
             &mut buff,
             0,
             layout,
-            );
+        );
 
         let mut is_dead = false;
         let result = match len {
@@ -118,7 +121,37 @@ impl WindowsListener {
         }
     }
 
-    unsafe fn process_event(code: i32, param: WPARAM, lpdata: LPARAM) {
+    unsafe fn process_shortcut_event(code: i32, param: WPARAM, lpdata: LPARAM) {
+        if code as u32 != HC_ACTION {
+            return;
+        }
+        match param.0 as u32 {
+            WM_KEYDOWN | WM_SYSKEYDOWN => {
+                let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
+                let virtual_key_code = keyboard_struct.vkCode;
+                if virtual_key_code == VK_CONTROL.0.into() {
+                    let alt_state = GetKeyState(VK_LMENU.0.into());
+                    let alt_down = alt_state < 0;
+                    if alt_down {
+                        if let Some(sender) = &SHORTCUT_SENDER {
+                            let _ = sender.send(());
+                        };
+                    }
+                } else if virtual_key_code == VK_LMENU.0.into() {
+                    let ctrl_state = GetKeyState(VK_CONTROL.0.into());
+                    let ctrl_down = ctrl_state < 0;
+                    if ctrl_down {
+                        if let Some(sender) = &SHORTCUT_SENDER {
+                            let _ = sender.send(());
+                        };
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+
+    unsafe fn process_mouse_key_event(code: i32, param: WPARAM, lpdata: LPARAM) {
         if code as u32 != HC_ACTION {
             return;
         }
@@ -145,73 +178,73 @@ impl WindowsListener {
 
                 let key = Key::from_virtual_key_code(virtual_key_code);
 
-                if let Some(sender) = &SENDER {
-                    let _ = sender.send(Event::Key { unicode_char, key });
+                if let Some(sender) = &MOUSE_KEY_SENDER {
+                    let _ = sender.send(MouseKeyEvent::Key { unicode_char, key });
                 };
-            }
-            WM_KEYUP | WM_SYSKEYUP => {
-                // println!("keyup");
             }
             WM_RBUTTONDOWN | WM_RBUTTONUP | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_MBUTTONDOWN
             | WM_MBUTTONUP => {
-                if let Some(sender) = &SENDER {
-                    let _ = sender.send(Event::Mouse);
+                if let Some(sender) = &MOUSE_KEY_SENDER {
+                    let _ = sender.send(MouseKeyEvent::Mouse);
                 }
             }
             _ => (),
         }
     }
 
-    unsafe extern "system" fn raw_callback(code: i32, param: WPARAM, lpdata: LPARAM) -> LRESULT {
-        Self::process_event(code, param, lpdata);
+    unsafe extern "system" fn raw_mouse_key_callback(
+        code: i32,
+        param: WPARAM,
+        lpdata: LPARAM,
+    ) -> LRESULT {
+        Self::process_mouse_key_event(code, param, lpdata);
+        CallNextHookEx(HHOOK(null_mut()), code, param, lpdata)
+    }
+
+    unsafe extern "system" fn raw_shortcut_callback(
+        code: i32,
+        param: WPARAM,
+        lpdata: LPARAM,
+    ) -> LRESULT {
+        Self::process_shortcut_event(code, param, lpdata);
         CallNextHookEx(HHOOK(null_mut()), code, param, lpdata)
     }
 }
 
 impl Listener for WindowsListener {
-    fn start_listening(sender: Sender<Event>, listen_for_envent: ListenForEvent) -> JoinHandle<()> {
+    fn start_mouse_key_listening(sender: Sender<MouseKeyEvent>) -> JoinHandle<()> {
         {
-            let mut is_listening = IS_LISTENING.lock().unwrap();
+            let mut is_listening = MOUSE_KEY_LISTENING.lock().unwrap();
             *is_listening = true
         }
         unsafe {
-            SENDER = Some(sender);
+            MOUSE_KEY_SENDER = Some(sender);
             KEYBOARD_STATE = Some(WindowsKeyboardListenerState::default());
         }
 
         thread::spawn(move || unsafe {
-            let keyboard_hook = match listen_for_envent {
-                ListenForEvent::Key | ListenForEvent::MouseAndKey => Some(
-                    SetWindowsHookExW(
-                        WH_KEYBOARD_LL,
-                        Some(Self::raw_callback),
-                        HINSTANCE(null_mut()),
-                        0,
-                    )
-                    .unwrap(),
-                ),
-                _ => None,
-            };
+            let keyboard_hook = SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(Self::raw_mouse_key_callback),
+                HINSTANCE(null_mut()),
+                0,
+            )
+            .unwrap();
 
-            let mouse_hook = match listen_for_envent {
-                ListenForEvent::Mouse | ListenForEvent::MouseAndKey => Some(
-                    SetWindowsHookExW(
-                        WH_MOUSE_LL,
-                        Some(Self::raw_callback),
-                        HINSTANCE(null_mut()),
-                        0,
-                    )
-                    .unwrap(),
-                ),
-                _ => None,
-            };
+            let mouse_hook = SetWindowsHookExW(
+                WH_MOUSE_LL,
+                Some(Self::raw_mouse_key_callback),
+                HINSTANCE(null_mut()),
+                0,
+            )
+            .unwrap();
 
             loop {
                 if WaitMessage().is_err() {
                     break;
                 }
 
-                let is_listenting = IS_LISTENING.lock().unwrap();
+                let is_listenting = MOUSE_KEY_LISTENING.lock().unwrap();
                 if !*is_listenting {
                     break;
                 }
@@ -225,20 +258,64 @@ impl Listener for WindowsListener {
                 );
             }
 
-            if let Some(mouse_hook) = mouse_hook {
-                UnhookWindowsHookEx(mouse_hook).unwrap();
-            }
+            UnhookWindowsHookEx(mouse_hook).unwrap();
 
-            if let Some(keyboard_hook) = keyboard_hook {
-                UnhookWindowsHookEx(keyboard_hook).unwrap();
-            }
+            UnhookWindowsHookEx(keyboard_hook).unwrap();
 
-            SENDER = None;
+            MOUSE_KEY_SENDER = None;
         })
     }
 
-    fn stop_listening() {
-        let mut is_listening = IS_LISTENING.lock().unwrap();
+    fn stop_mouse_key_listening() {
+        let mut is_listening = MOUSE_KEY_LISTENING.lock().unwrap();
+        *is_listening = false;
+    }
+
+    fn start_shortcut_listening(sender: Sender<()>) -> JoinHandle<()> {
+        {
+            let mut is_listening = SHORTCUT_LISTENING.lock().unwrap();
+            *is_listening = true
+        }
+        unsafe {
+            SHORTCUT_SENDER = Some(sender);
+        }
+
+        thread::spawn(move || unsafe {
+            let shortcut_hook = SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(Self::raw_shortcut_callback),
+                HINSTANCE(null_mut()),
+                0,
+            )
+            .unwrap();
+
+            loop {
+                if WaitMessage().is_err() {
+                    break;
+                }
+
+                let is_listenting = SHORTCUT_LISTENING.lock().unwrap();
+                if !*is_listenting {
+                    break;
+                }
+
+                let _ = PeekMessageW(
+                    null_mut(),
+                    HWND(null_mut()),
+                    0,
+                    0,
+                    PEEK_MESSAGE_REMOVE_TYPE(0),
+                );
+            }
+
+            UnhookWindowsHookEx(shortcut_hook).unwrap();
+
+            SHORTCUT_SENDER = None;
+        })
+    }
+
+    fn stop_shortcut_listening() {
+        let mut is_listening = SHORTCUT_LISTENING.lock().unwrap();
         *is_listening = false;
     }
 }

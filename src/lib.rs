@@ -4,6 +4,7 @@ pub mod input_controller;
 pub mod input_listener;
 pub mod input_simulator;
 pub mod keys;
+pub mod utils;
 
 #[cfg(target_os = "windows")]
 mod windows;

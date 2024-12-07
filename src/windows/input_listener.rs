@@ -1,3 +1,4 @@
+use crate::debug_println;
 use crate::input_listener::{Listener, MouseKeyEvent};
 use crate::keys::Key;
 use crate::windows::keys_converter::KeyConverter;
@@ -9,13 +10,14 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_CONTROL, VK_LMENU, VK_MENU, VK_PACKET, VK_SHIFT
+    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, HKL, VK_CONTROL, VK_MENU,
+    VK_PACKET, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, PeekMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WaitMessage, HC_ACTION,
-    HHOOK, KBDLLHOOKSTRUCT, LLKHF_ALTDOWN, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE,
-    WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN,
-    WM_MBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN,
+    HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PEEK_MESSAGE_REMOVE_TYPE, WH_KEYBOARD_LL, WH_MOUSE_LL,
+    WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_RBUTTONDOWN,
+    WM_RBUTTONUP, WM_SYSKEYDOWN,
 };
 
 lazy_static! {
@@ -121,14 +123,14 @@ impl WindowsListener {
     }
 
     unsafe fn process_shortcut_event(code: i32, param: WPARAM, lpdata: LPARAM) {
-        println!("shortcut1");
+        debug_println!("shortcut1");
         if code as u32 != HC_ACTION {
-            println!("shortcut2");
+            debug_println!("shortcut2");
             return;
         }
         match param.0 as u32 {
             WM_KEYDOWN | WM_SYSKEYDOWN => {
-            println!("shortcut3");
+                debug_println!("shortcut3");
                 let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
                 let virtual_key_code = keyboard_struct.vkCode;
 
@@ -160,14 +162,14 @@ impl WindowsListener {
     }
 
     unsafe fn process_mouse_key_event(code: i32, param: WPARAM, lpdata: LPARAM) {
-        println!("key1");
+        debug_println!("key1");
         if code as u32 != HC_ACTION {
-            println!("key2");
+            debug_println!("key2");
             return;
         }
         match param.0 as u32 {
             WM_KEYDOWN | WM_SYSKEYDOWN => {
-                println!("key3");
+                debug_println!("key3");
                 let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
                 let virtual_key_code = keyboard_struct.vkCode;
                 let scan_code = keyboard_struct.scanCode;

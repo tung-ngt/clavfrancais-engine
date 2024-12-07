@@ -20,7 +20,7 @@ fn main() {
             is_french = false;
             println!("english")
         } else {
-            let join_handle = thread::spawn(|| {
+            let _ = thread::spawn(|| {
                 Engine::start(
                     setup_key_combination_map(),
                     StackSizedCharBuffer::<30>::default(),

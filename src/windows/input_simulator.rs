@@ -9,8 +9,6 @@ use crate::input_simulator::InputSimulator;
 pub struct WindowsInputSimulator;
 
 impl InputSimulator for WindowsInputSimulator {
-    fn text(content: &str) {}
-
     fn character(c: char) {
         unsafe {
             let input_array = [

@@ -123,14 +123,11 @@ impl WindowsListener {
     }
 
     unsafe fn process_shortcut_event(code: i32, param: WPARAM, lpdata: LPARAM) {
-        debug_println!("shortcut1");
         if code as u32 != HC_ACTION {
-            debug_println!("shortcut2");
             return;
         }
         match param.0 as u32 {
             WM_KEYDOWN | WM_SYSKEYDOWN => {
-                debug_println!("shortcut3");
                 let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
                 let virtual_key_code = keyboard_struct.vkCode;
 
@@ -162,14 +159,11 @@ impl WindowsListener {
     }
 
     unsafe fn process_mouse_key_event(code: i32, param: WPARAM, lpdata: LPARAM) {
-        debug_println!("key1");
         if code as u32 != HC_ACTION {
-            debug_println!("key2");
             return;
         }
         match param.0 as u32 {
             WM_KEYDOWN | WM_SYSKEYDOWN => {
-                debug_println!("key3");
                 let keyboard_struct = *(lpdata.0 as *const KBDLLHOOKSTRUCT);
                 let virtual_key_code = keyboard_struct.vkCode;
                 let scan_code = keyboard_struct.scanCode;
@@ -210,8 +204,9 @@ impl WindowsListener {
         param: WPARAM,
         lpdata: LPARAM,
     ) -> LRESULT {
+        let result = CallNextHookEx(HHOOK(null_mut()), code, param, lpdata);
         Self::process_mouse_key_event(code, param, lpdata);
-        CallNextHookEx(HHOOK(null_mut()), code, param, lpdata)
+        result
     }
 
     unsafe extern "system" fn raw_shortcut_callback(
@@ -219,8 +214,9 @@ impl WindowsListener {
         param: WPARAM,
         lpdata: LPARAM,
     ) -> LRESULT {
+        let result = CallNextHookEx(HHOOK(null_mut()), code, param, lpdata);
         Self::process_shortcut_event(code, param, lpdata);
-        CallNextHookEx(HHOOK(null_mut()), code, param, lpdata)
+        result
     }
 }
 

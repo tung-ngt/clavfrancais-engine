@@ -75,13 +75,13 @@ where
                     InputSimulatorImpl::backspace();
 
                     if let CombinationTarget::Combine(a) = target {
-                        InputSimulatorImpl::character(*a);
+                        InputSimulatorImpl::character(a);
                         continue;
                     }
 
                     if let CombinationTarget::Revert(a, b) = target {
-                        InputSimulatorImpl::character(*a);
-                        InputSimulatorImpl::character(*b);
+                        InputSimulatorImpl::character(a);
+                        InputSimulatorImpl::character(b);
                     }
                 }
             }

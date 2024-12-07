@@ -1,3 +1,5 @@
+use crate::debug_println;
+
 use super::char_buffer::*;
 
 use std::collections::HashMap;
@@ -5,7 +7,7 @@ use std::collections::HashMap;
 #[derive(Eq, Hash, PartialEq, Debug)]
 pub struct KeyCombination(char, char);
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum CombinationTarget {
     Combine(char),
     Revert(char, char),
@@ -78,15 +80,19 @@ impl<T: CharBuffer> InputController<T> {
         }
     }
 
-    pub fn add_char(&mut self, current_char: char) -> Option<&CombinationTarget> {
+    pub fn add_char(&mut self, current_char: char) -> Option<CombinationTarget> {
+        debug_println!("{:?}", self.char_buffer);
         let Some(previous_char) = self.char_buffer.top()
         else {
             self.char_buffer.push(current_char);
             return None;
         };
 
+        let previous_char_lower = previous_char.to_lowercase().next().unwrap();
+        let current_char_lower = current_char.to_lowercase().next().unwrap();
+
         let Some(combination_target) = self.combination_map
-            .get(&KeyCombination(previous_char, current_char))
+            .get(&KeyCombination(previous_char_lower, current_char_lower))
         else {
             self.char_buffer.push(current_char);
             return None;
@@ -94,15 +100,36 @@ impl<T: CharBuffer> InputController<T> {
 
         self.char_buffer.pop();
 
-        match combination_target {
+        let combination_target = match combination_target {
             CombinationTarget::Combine(f) => {
-                self.char_buffer.push(*f);
+                let f = if previous_char.is_lowercase() {
+                    *f
+                } else {
+                    f.to_uppercase().next().unwrap()
+                };
+
+                self.char_buffer.push(f);
+                CombinationTarget::Combine(f)
             },
             CombinationTarget::Revert(f, s) => {
-                self.char_buffer.push(*f);
-                self.char_buffer.push(*s);
+                let f = if previous_char.is_lowercase() {
+                    *f
+                } else {
+                    f.to_uppercase().next().unwrap()
+                };
+
+                let s = if current_char.is_lowercase() {
+                    *s
+                } else {
+                    s.to_uppercase().next().unwrap()
+                };
+
+                self.char_buffer.push(f);
+                self.char_buffer.push(s);
+
+                CombinationTarget::Revert(f, s)
             },
-        }
+        };
 
         Some(combination_target)
     }
@@ -143,7 +170,7 @@ mod tests {
             assert_eq!(controller.add_char(key_combination.0), None);
             assert_eq!(
                 controller.add_char(key_combination.1),
-                Some(&combination_target)
+                Some(combination_target)
             );
 
             match combination_target {

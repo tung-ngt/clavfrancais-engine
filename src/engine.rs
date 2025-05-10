@@ -67,12 +67,12 @@ pub fn setup_key_combination_map() -> KeyCombinationMap {
     char_map
 }
 #[derive(Debug)]
-pub struct InputController<T: CharBuffer> {
+pub struct Engine<T: CharBuffer> {
     pub char_buffer: T,
     combination_map: KeyCombinationMap,
 }
 
-impl<T: CharBuffer> InputController<T> {
+impl<T: CharBuffer> Engine<T> {
     pub fn new(combination_map: KeyCombinationMap, char_buffer: T) -> Self {
         Self {
             char_buffer,
@@ -82,8 +82,7 @@ impl<T: CharBuffer> InputController<T> {
 
     pub fn add_char(&mut self, current_char: char) -> Option<CombinationTarget> {
         debug_println!("{:?}", self.char_buffer);
-        let Some(previous_char) = self.char_buffer.top()
-        else {
+        let Some(previous_char) = self.char_buffer.top() else {
             self.char_buffer.push(current_char);
             return None;
         };
@@ -91,7 +90,8 @@ impl<T: CharBuffer> InputController<T> {
         let previous_char_lower = previous_char.to_lowercase().next().unwrap();
         let current_char_lower = current_char.to_lowercase().next().unwrap();
 
-        let Some(combination_target) = self.combination_map
+        let Some(combination_target) = self
+            .combination_map
             .get(&KeyCombination(previous_char_lower, current_char_lower))
         else {
             self.char_buffer.push(current_char);
@@ -110,7 +110,7 @@ impl<T: CharBuffer> InputController<T> {
 
                 self.char_buffer.push(f);
                 CombinationTarget::Combine(f)
-            },
+            }
             CombinationTarget::Revert(f, s) => {
                 let f = if previous_char.is_lowercase() {
                     *f
@@ -128,7 +128,7 @@ impl<T: CharBuffer> InputController<T> {
                 self.char_buffer.push(s);
 
                 CombinationTarget::Revert(f, s)
-            },
+            }
         };
 
         Some(combination_target)
@@ -176,11 +176,11 @@ mod tests {
             match combination_target {
                 CombinationTarget::Combine(_) => {
                     controller.char_buffer.pop();
-                },
+                }
                 CombinationTarget::Revert(_, _) => {
                     controller.char_buffer.pop();
                     controller.char_buffer.pop();
-                },
+                }
             }
         }
     }

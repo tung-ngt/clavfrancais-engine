@@ -2,13 +2,17 @@ use crate::debug_println;
 
 use super::char_buffer::*;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, hint::unreachable_unchecked};
 
 #[derive(Eq, Hash, PartialEq, Debug)]
-pub struct KeyCombination(char, char);
+pub enum KeyCombination {
+    Single(char),
+    Double(char, char),
+}
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum CombinationTarget {
+    Replace(char),
     Combine(char),
     Revert(char, char),
 }
@@ -19,50 +23,60 @@ pub type KeyCombinationMap = HashMap<KeyCombination, CombinationTarget>;
 pub fn setup_key_combination_map() -> KeyCombinationMap {
     let mut char_map = KeyCombinationMap::new();
 
+    // Replace map
+    char_map.insert(KeyCombination::Single('$'), CombinationTarget::Replace('€'));
+    char_map.insert(KeyCombination::Single('<'), CombinationTarget::Replace('«'));
+    char_map.insert(KeyCombination::Single('>'), CombinationTarget::Replace('»'));
+
+    // Reverse replace map
+    char_map.insert(KeyCombination::Double('€', '€'), CombinationTarget::Combine('$'));
+    char_map.insert(KeyCombination::Double('«', '«'), CombinationTarget::Combine('<'));
+    char_map.insert(KeyCombination::Double('»', '»'), CombinationTarget::Combine('>'));
+
     // Combination map
-    char_map.insert(KeyCombination('a', 'a'), CombinationTarget::Combine('â'));
-    char_map.insert(KeyCombination('e', 'e'), CombinationTarget::Combine('ê'));
-    char_map.insert(KeyCombination('i', 'i'), CombinationTarget::Combine('î'));
-    char_map.insert(KeyCombination('o', 'o'), CombinationTarget::Combine('ô'));
-    char_map.insert(KeyCombination('u', 'u'), CombinationTarget::Combine('û'));
+    char_map.insert(KeyCombination::Double('a', 'a'), CombinationTarget::Combine('â'));
+    char_map.insert(KeyCombination::Double('e', 'e'), CombinationTarget::Combine('ê'));
+    char_map.insert(KeyCombination::Double('i', 'i'), CombinationTarget::Combine('î'));
+    char_map.insert(KeyCombination::Double('o', 'o'), CombinationTarget::Combine('ô'));
+    char_map.insert(KeyCombination::Double('u', 'u'), CombinationTarget::Combine('û'));
     
-    char_map.insert(KeyCombination('a', 'f'), CombinationTarget::Combine('à'));
-    char_map.insert(KeyCombination('e', 'f'), CombinationTarget::Combine('è'));
-    char_map.insert(KeyCombination('u', 'f'), CombinationTarget::Combine('ù'));
+    char_map.insert(KeyCombination::Double('a', 'f'), CombinationTarget::Combine('à'));
+    char_map.insert(KeyCombination::Double('e', 'f'), CombinationTarget::Combine('è'));
+    char_map.insert(KeyCombination::Double('u', 'f'), CombinationTarget::Combine('ù'));
     
-    char_map.insert(KeyCombination('e', 'x'), CombinationTarget::Combine('ë'));
-    char_map.insert(KeyCombination('i', 'x'), CombinationTarget::Combine('ï'));
-    char_map.insert(KeyCombination('u', 'x'), CombinationTarget::Combine('ü'));
+    char_map.insert(KeyCombination::Double('e', 'x'), CombinationTarget::Combine('ë'));
+    char_map.insert(KeyCombination::Double('i', 'x'), CombinationTarget::Combine('ï'));
+    char_map.insert(KeyCombination::Double('u', 'x'), CombinationTarget::Combine('ü'));
     
-    char_map.insert(KeyCombination('e', 'w'), CombinationTarget::Combine('é'));
+    char_map.insert(KeyCombination::Double('e', 'w'), CombinationTarget::Combine('é'));
     
-    char_map.insert(KeyCombination('c', 'c'), CombinationTarget::Combine('ç'));
+    char_map.insert(KeyCombination::Double('c', 'c'), CombinationTarget::Combine('ç'));
     
-    char_map.insert(KeyCombination('a', 'e'), CombinationTarget::Combine('æ'));
-    char_map.insert(KeyCombination('o', 'e'), CombinationTarget::Combine('œ'));
+    char_map.insert(KeyCombination::Double('a', 'e'), CombinationTarget::Combine('æ'));
+    char_map.insert(KeyCombination::Double('o', 'e'), CombinationTarget::Combine('œ'));
 
     // Reverse combination map
-    char_map.insert(KeyCombination('â', 'a'), CombinationTarget::Revert('a', 'a'));
-    char_map.insert(KeyCombination('ê', 'e'), CombinationTarget::Revert('e', 'e'));
+    char_map.insert(KeyCombination::Double('â', 'a'), CombinationTarget::Revert('a', 'a'));
+    char_map.insert(KeyCombination::Double('ê', 'e'), CombinationTarget::Revert('e', 'e'));
     
-    char_map.insert(KeyCombination('î', 'i'), CombinationTarget::Revert('i', 'i'));
-    char_map.insert(KeyCombination('ô', 'o'), CombinationTarget::Revert('o', 'o'));
-    char_map.insert(KeyCombination('û', 'u'), CombinationTarget::Revert('u', 'u'));
+    char_map.insert(KeyCombination::Double('î', 'i'), CombinationTarget::Revert('i', 'i'));
+    char_map.insert(KeyCombination::Double('ô', 'o'), CombinationTarget::Revert('o', 'o'));
+    char_map.insert(KeyCombination::Double('û', 'u'), CombinationTarget::Revert('u', 'u'));
     
-    char_map.insert(KeyCombination('à', 'f'), CombinationTarget::Revert('a', 'f'));
-    char_map.insert(KeyCombination('è', 'f'), CombinationTarget::Revert('e', 'f'));
-    char_map.insert(KeyCombination('ù', 'f'), CombinationTarget::Revert('u', 'f'));
+    char_map.insert(KeyCombination::Double('à', 'f'), CombinationTarget::Revert('a', 'f'));
+    char_map.insert(KeyCombination::Double('è', 'f'), CombinationTarget::Revert('e', 'f'));
+    char_map.insert(KeyCombination::Double('ù', 'f'), CombinationTarget::Revert('u', 'f'));
     
-    char_map.insert(KeyCombination('ë', 'x'), CombinationTarget::Revert('e', 'x'));
-    char_map.insert(KeyCombination('ï', 'x'), CombinationTarget::Revert('i', 'x'));
-    char_map.insert(KeyCombination('ü', 'x'), CombinationTarget::Revert('u', 'x'));
+    char_map.insert(KeyCombination::Double('ë', 'x'), CombinationTarget::Revert('e', 'x'));
+    char_map.insert(KeyCombination::Double('ï', 'x'), CombinationTarget::Revert('i', 'x'));
+    char_map.insert(KeyCombination::Double('ü', 'x'), CombinationTarget::Revert('u', 'x'));
     
-    char_map.insert(KeyCombination('é', 'w'), CombinationTarget::Revert('e', 'w'));
+    char_map.insert(KeyCombination::Double('é', 'w'), CombinationTarget::Revert('e', 'w'));
 
-    char_map.insert(KeyCombination('ç', 'c'), CombinationTarget::Revert('c', 'c'));
+    char_map.insert(KeyCombination::Double('ç', 'c'), CombinationTarget::Revert('c', 'c'));
     
-    char_map.insert(KeyCombination('æ', 'e'), CombinationTarget::Revert('a', 'e'));
-    char_map.insert(KeyCombination('œ', 'e'), CombinationTarget::Revert('o', 'e'));
+    char_map.insert(KeyCombination::Double('æ', 'e'), CombinationTarget::Revert('a', 'e'));
+    char_map.insert(KeyCombination::Double('œ', 'e'), CombinationTarget::Revert('o', 'e'));
 
     char_map
 }
@@ -82,18 +96,32 @@ impl<T: CharBuffer> Engine<T> {
 
     pub fn add_char(&mut self, current_char: char) -> Option<CombinationTarget> {
         debug_println!("{:?}", self.char_buffer);
+        let current_char_lower = current_char.to_lowercase().next().unwrap();
+        if let Some(combination_target) = self
+            .combination_map
+            .get(&KeyCombination::Single(current_char_lower))
+        {
+            let CombinationTarget::Replace(c) = combination_target else {
+                unsafe {
+                    unreachable_unchecked();
+                }
+            };
+
+            self.char_buffer.push(*c);
+            return Some(*combination_target);
+        }
+
         let Some(previous_char) = self.char_buffer.top() else {
             self.char_buffer.push(current_char);
             return None;
         };
 
         let previous_char_lower = previous_char.to_lowercase().next().unwrap();
-        let current_char_lower = current_char.to_lowercase().next().unwrap();
 
-        let Some(combination_target) = self
-            .combination_map
-            .get(&KeyCombination(previous_char_lower, current_char_lower))
-        else {
+        let Some(combination_target) = self.combination_map.get(&KeyCombination::Double(
+            previous_char_lower,
+            current_char_lower,
+        )) else {
             self.char_buffer.push(current_char);
             return None;
         };
@@ -129,6 +157,9 @@ impl<T: CharBuffer> Engine<T> {
 
                 CombinationTarget::Revert(f, s)
             }
+            _ => unsafe {
+                unreachable_unchecked();
+            },
         };
 
         Some(combination_target)
@@ -167,21 +198,27 @@ mod tests {
         assert!(controller.char_buffer.is_empty());
 
         for (key_combination, combination_target) in key_combination_map {
-            assert_eq!(controller.add_char(key_combination.0), None);
-            assert_eq!(
-                controller.add_char(key_combination.1),
-                Some(combination_target)
-            );
-
-            match combination_target {
-                CombinationTarget::Combine(_) => {
-                    controller.char_buffer.pop();
+            match key_combination {
+                KeyCombination::Single(c) => {
+                    assert_eq!(controller.add_char(c), Some(combination_target));
                 }
-                CombinationTarget::Revert(_, _) => {
-                    controller.char_buffer.pop();
-                    controller.char_buffer.pop();
+                KeyCombination::Double(f, s) => {
+                    assert_eq!(controller.add_char(f), None);
+                    assert_eq!(controller.add_char(s), Some(combination_target));
+
+                    match combination_target {
+                        CombinationTarget::Combine(_) => {
+                            controller.char_buffer.pop();
+                        }
+                        CombinationTarget::Revert(_, _) => {
+                            controller.char_buffer.pop();
+                            controller.char_buffer.pop();
+                        }
+                        _ => unreachable!("should be combine or revert"),
+                    }
                 }
             }
+            controller.clear_char_buffer();
         }
     }
 

@@ -147,9 +147,9 @@ impl<T: CharBuffer> Engine<T> {
 mod tests {
     use super::*;
 
-    fn setup_new_controller() -> InputController<ResizableCharBuffer> {
+    fn setup_new_controller() -> Engine<ResizableCharBuffer> {
         let key_combination_map = setup_key_combination_map();
-        InputController::new(key_combination_map, ResizableCharBuffer::new())
+        Engine::new(key_combination_map, ResizableCharBuffer::new())
     }
 
     #[test]

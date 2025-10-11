@@ -25,10 +25,11 @@ pub fn setup_key_combination_map() -> KeyCombinationMap {
 
     // Replace map
     char_map.insert(KeyCombination::Single('$'), CombinationTarget::Replace('€'));
-    char_map.insert(KeyCombination::Single('<'), CombinationTarget::Replace('«'));
-    char_map.insert(KeyCombination::Single('>'), CombinationTarget::Replace('»'));
 
     // Combination map
+    char_map.insert(KeyCombination::Double('<', '<'), CombinationTarget::Combine('«'));
+    char_map.insert(KeyCombination::Double('>', '>'), CombinationTarget::Combine('»'));
+
     char_map.insert(KeyCombination::Double('a', 'a'), CombinationTarget::Combine('â'));
     char_map.insert(KeyCombination::Double('e', 'e'), CombinationTarget::Combine('ê'));
     char_map.insert(KeyCombination::Double('i', 'i'), CombinationTarget::Combine('î'));
@@ -51,6 +52,9 @@ pub fn setup_key_combination_map() -> KeyCombinationMap {
     char_map.insert(KeyCombination::Double('o', 'e'), CombinationTarget::Combine('œ'));
 
     // Reverse combination map
+    char_map.insert(KeyCombination::Double('«', '<'), CombinationTarget::Revert('<', '<'));
+    char_map.insert(KeyCombination::Double('»', '>'), CombinationTarget::Revert('>', '>'));
+
     char_map.insert(KeyCombination::Double('â', 'a'), CombinationTarget::Revert('a', 'a'));
     char_map.insert(KeyCombination::Double('ê', 'e'), CombinationTarget::Revert('e', 'e'));
     

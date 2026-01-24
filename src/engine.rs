@@ -26,9 +26,6 @@ pub fn setup_key_combination_map() -> KeyCombinationMap {
     // Replace map
     char_map.insert(KeyCombination::Single('$'), CombinationTarget::Replace('€'));
 
-    // Reverse replace map
-    char_map.insert(KeyCombination::Double('€', '€'), CombinationTarget::Combine('$'));
-
     // Combination map
     char_map.insert(KeyCombination::Double('<', '<'), CombinationTarget::Combine('«'));
     char_map.insert(KeyCombination::Double('>', '>'), CombinationTarget::Combine('»'));

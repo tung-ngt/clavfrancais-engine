@@ -7,7 +7,7 @@ Support both [Windows](https://github.com/tung-ngt/clavfrancais-windows) and [Li
 
 ### *Windows GUI*
 
-![main](screenshots/app.jpg)
+![main](https://raw.githubusercontent.com/tung-ngt/clavfrancais-windows/refs/heads/main/screenshots/app.jpg)
 
 
 

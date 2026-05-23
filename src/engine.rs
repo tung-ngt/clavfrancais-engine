@@ -81,7 +81,7 @@ pub fn setup_key_combination_map() -> KeyCombinationMap {
 }
 #[derive(Debug)]
 pub struct Engine<T: CharBuffer> {
-    pub char_buffer: T,
+    char_buffer: T,
     combination_map: KeyCombinationMap,
 }
 
@@ -170,6 +170,14 @@ impl<T: CharBuffer> Engine<T> {
 
     pub fn backspace(&mut self) {
         self.char_buffer.pop();
+    }
+
+    pub fn push_str_without_processing(&mut self, text: &str) {
+        self.char_buffer.push_str(text);
+    }
+
+    pub fn push_char_without_processing(&mut self, element: char) {
+        self.char_buffer.push(element);
     }
 }
 

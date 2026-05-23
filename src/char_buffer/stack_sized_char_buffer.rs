@@ -61,4 +61,8 @@ impl<const CAPACITY: usize> CharBuffer for StackSizedCharBuffer<CAPACITY> {
     fn clear(&mut self) {
         self.len = 0;
     }
+
+    fn push_str(&mut self, text: &str) {
+        text.chars().for_each(|c| self.push(c));
+    }
 }

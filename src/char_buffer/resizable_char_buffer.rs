@@ -43,6 +43,10 @@ impl CharBuffer for ResizableCharBuffer {
     fn clear(&mut self) {
         self.elements.clear()
     }
+
+    fn push_str(&mut self, text: &str) {
+        self.elements.extend(text.chars());
+    }
 }
 
 #[cfg(test)]
